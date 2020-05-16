@@ -1,0 +1,53 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: test
+spec:
+  ports:
+  - port: 80
+    targetPort: 5678
+  selector:
+    app: test
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: test
+spec:
+  replicas: {{.deployment.replicas}}
+  selector:
+    matchLabels:
+      app: test
+  template:
+    metadata:
+      labels:
+        app: test
+    spec:
+      containers:
+      - name: test
+        image: hashicorp/http-echo
+        args:
+        - "-text={{.echo_text}}"
+        ports:
+        - containerPort: 5678
+---
+apiVersion: networking.k8s.io/v1beta1
+kind: Ingress
+metadata:
+  name: test
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+    external-dns: ''
+spec:
+  tls:
+  - hosts:
+    - test.{{.cluster_domain}}
+    secretName: test-tls
+  rules:
+  - host: test.{{.cluster_domain}}
+    http:
+      paths:
+      - path: /
+        backend:
+          serviceName: test
+          servicePort: 80
