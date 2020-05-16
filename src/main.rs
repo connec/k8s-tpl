@@ -74,7 +74,7 @@ fn yaml_to_gtmpl(input: Yaml) -> Result<gtmpl::Value, Box<dyn Error>> {
                 output.insert(key, yaml_to_gtmpl(value)?);
                 Ok(())
             })?;
-        Ok(Map(output))
+        Ok(Object(output))
     } else if input.as_i64().is_some() {
         Ok(Number(input.into_i64().unwrap().into()))
     } else if input.as_str().is_some() {
