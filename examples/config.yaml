@@ -1,0 +1,4 @@
+cluster_domain: connec.co.uk
+echo_text: OK
+deployment:
+  replicas: 1
