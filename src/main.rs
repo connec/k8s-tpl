@@ -14,7 +14,8 @@ struct Command {
 
     /// The path to a configuration YAML file.
     ///
-    /// The YAML file should contain a single document and any mappings must have string keys.
+    /// The YAML file should contain a single document with a mapping at the root. All mappings in
+    /// the document must have only string keys.
     #[structopt(long, short)]
     config: String,
 }
@@ -51,7 +52,12 @@ fn load_config(path: &str) -> Result<Yaml, Box<dyn Error>> {
         }
     };
 
-    Ok(config)
+    let config = match config {
+        Yaml::Hash(config) => config,
+        _ => return Err(format!("Config file {} does not contain a mapping", path).into()),
+    };
+
+    Ok(Yaml::Hash(config))
 }
 
 /// Convert a [`yaml_rust::Yaml`] value into a [`gtmpl::Value`].
