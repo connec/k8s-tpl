@@ -29,3 +29,7 @@ k8s-tpl --help
 k8s-tpl --filename kubernetes.yaml --config dev.yaml \
   | kubectl apply -f -
 ```
+
+### Environment variables
+
+`k8s-tpl` injects environment variables into an `Env` key in the template context.

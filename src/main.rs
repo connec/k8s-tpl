@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::env;
 use std::error::Error;
 use std::fs::{self};
 
@@ -52,10 +53,19 @@ fn load_config(path: &str) -> Result<Yaml, Box<dyn Error>> {
         }
     };
 
-    let config = match config {
+    let mut config = match config {
         Yaml::Hash(config) => config,
         _ => return Err(format!("Config file {} does not contain a mapping", path).into()),
     };
+
+    config.insert(
+        Yaml::String("Env".to_string()),
+        Yaml::Hash(
+            env::vars()
+                .map(|(k, v)| (Yaml::String(k), Yaml::String(v)))
+                .collect(),
+        ),
+    );
 
     Ok(Yaml::Hash(config))
 }
