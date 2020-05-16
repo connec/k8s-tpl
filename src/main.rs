@@ -39,16 +39,19 @@ fn load_manifest(path: &str) -> Result<String, Box<dyn Error>> {
 fn load_config(path: &str) -> Result<Yaml, Box<dyn Error>> {
     let mut config = YamlLoader::load_from_str(&fs::read_to_string(path)?)?;
 
-    if config.len() != 1 {
-        return Err(format!(
-            "Expected {} to contain a single YAML document but found {}",
-            path,
-            config.len()
-        )
-        .into());
-    }
+    let config = match config.len() {
+        0 => return Err(format!("Config file {} is empty", path).into()),
+        1 => config.remove(0),
+        len => {
+            return Err(format!(
+                "Config file {} contains multiple ({}) YAML documents – only one is allowed",
+                path, len
+            )
+            .into())
+        }
+    };
 
-    Ok(config.remove(0))
+    Ok(config)
 }
 
 /// Convert a [`yaml_rust::Yaml`] value into a [`gtmpl::Value`].
