@@ -1,2 +1,3 @@
-# kubetpl
+# `kubetpl`
+
 Templatisation for Kubernetes manifests
