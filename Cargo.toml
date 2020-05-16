@@ -1,6 +1,6 @@
 [package]
 name = "k8s-tpl"
-version = "0.1.0"
+version = "0.2.0"
 description = "Templatisation for Kubernetes manifests"
 repository = "https://github.com/connec/k8s-tpl/"
 authors = ["Chris Connelly <chris@connec.co.uk>"]
