@@ -1,10 +1,10 @@
-# `kubetpl`
+# `k8s-tpl`
 
 Templatisation for Kubernetes manifests
 
 ## Overview
 
-`kubetpl` is a CLI tool for interpolating Kubernetes manifests using the Go templating language.
+`k8s-tpl` is a CLI tool for interpolating Kubernetes manifests using the Go templating language.
 The supported input and output format is intended to facilitate usage in a pipeline with `kubectl apply -f -`.
 
 ## Usage
@@ -12,12 +12,12 @@ The supported input and output format is intended to facilitate usage in a pipel
 The CLI is largely self documenting:
 
 ```sh
-kubetpl --help
+k8s-tpl --help
 ```
 
 ### Basic usage
 
 ```sh
-kubetpl --filename kubernetes.yaml --config dev.yaml \
+k8s-tpl --filename kubernetes.yaml --config dev.yaml \
   | kubectl apply -f -
 ```

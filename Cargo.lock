@@ -93,7 +93,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "kubetpl"
+name = "k8s-tpl"
 version = "0.1.0"
 dependencies = [
  "gtmpl",
