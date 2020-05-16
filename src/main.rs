@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::env;
 use std::error::Error;
 use std::fs::{self};
 
@@ -14,7 +15,8 @@ struct Command {
 
     /// The path to a configuration YAML file.
     ///
-    /// The YAML file should contain a single document and any mappings must have string keys.
+    /// The YAML file should contain a single document with a mapping at the root. All mappings in
+    /// the document must have only string keys.
     #[structopt(long, short)]
     config: String,
 }
@@ -38,16 +40,34 @@ fn load_manifest(path: &str) -> Result<String, Box<dyn Error>> {
 
 fn load_config(path: &str) -> Result<Yaml, Box<dyn Error>> {
     let mut config = YamlLoader::load_from_str(&fs::read_to_string(path)?)?;
-    if config.len() == 1 {
-        Ok(config.remove(0))
-    } else {
-        Err(format!(
-            "Expected {} to contain a single YAML document but found {}",
-            path,
-            config.len()
-        )
-        .into())
-    }
+
+    let config = match config.len() {
+        0 => return Err(format!("Config file {} is empty", path).into()),
+        1 => config.remove(0),
+        len => {
+            return Err(format!(
+                "Config file {} contains multiple ({}) YAML documents – only one is allowed",
+                path, len
+            )
+            .into())
+        }
+    };
+
+    let mut config = match config {
+        Yaml::Hash(config) => config,
+        _ => return Err(format!("Config file {} does not contain a mapping", path).into()),
+    };
+
+    config.insert(
+        Yaml::String("Env".to_string()),
+        Yaml::Hash(
+            env::vars()
+                .map(|(k, v)| (Yaml::String(k), Yaml::String(v)))
+                .collect(),
+        ),
+    );
+
+    Ok(Yaml::Hash(config))
 }
 
 /// Convert a [`yaml_rust::Yaml`] value into a [`gtmpl::Value`].
