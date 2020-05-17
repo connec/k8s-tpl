@@ -1,11 +1,31 @@
-mod error;
-
 use std::collections::HashMap;
 use std::io;
 
 use yaml_rust::{Yaml, YamlLoader};
 
-pub use self::error::Error;
+#[derive(Debug, thiserror::Error)]
+pub enum Error {
+    #[error(transparent)]
+    Io(#[from] io::Error),
+
+    #[error(transparent)]
+    InvalidYaml(#[from] yaml_rust::ScanError),
+
+    #[error("the file is empty")]
+    NoDocuments,
+
+    #[error("the file contains {0} YAML documents but only 1 is allowed")]
+    MultipleDocuments(usize),
+
+    #[error("the YAML root is not a mapping")]
+    RootNotMapping(Yaml),
+
+    #[error("the YAML contains a non-string key: {0:?}")]
+    NonStringKey(Yaml),
+
+    #[error("the YAML contains a value that can't be used in a template: {0:?}")]
+    InvalidValue(Yaml),
+}
 
 #[derive(Default)]
 pub struct Config {
