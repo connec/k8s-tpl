@@ -26,7 +26,7 @@ k8s-tpl --help
 ### Basic usage
 
 ```sh
-k8s-tpl --filename kubernetes.yaml --config dev.yaml \
+k8s-tpl --config dev.yaml kubernetes.yaml \
   | kubectl apply -f -
 ```
 
