@@ -12,16 +12,15 @@ use self::config::Config;
 /// Templatisation for Kubernetes manifests
 #[derive(Debug, StructOpt)]
 struct Command {
-    /// The path to a Kubernetes manifest template.
-    #[structopt(long, short)]
-    filename: String,
-
     /// The path to a configuration YAML file.
     ///
     /// The YAML file should contain a single document with a mapping at the root. All mappings in
     /// the document must have only string keys.
     #[structopt(long, short)]
     config: Option<String>,
+
+    /// The path to a Kubernetes manifest template.
+    filename: String,
 }
 
 fn main() -> Result<()> {
