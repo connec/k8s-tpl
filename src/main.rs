@@ -4,7 +4,7 @@ use std::error::Error;
 use std::fs::{self};
 
 use structopt::StructOpt;
-use yaml_rust::{Yaml, YamlLoader};
+use yaml_rust::{yaml, Yaml, YamlLoader};
 
 /// Templatisation for Kubernetes manifests
 #[derive(Debug, StructOpt)]
@@ -18,16 +18,29 @@ struct Command {
     /// The YAML file should contain a single document with a mapping at the root. All mappings in
     /// the document must have only string keys.
     #[structopt(long, short)]
-    config: String,
+    config: Option<String>,
 }
 
 fn main() -> Result<(), Box<dyn Error>> {
     let cmd = Command::from_args();
 
     let manifest = load_manifest(&cmd.filename)?;
-    let config = load_config(&cmd.config)?;
+    let mut config = cmd
+        .config
+        .as_deref()
+        .map(load_config)
+        .unwrap_or_else(|| Ok(yaml::Hash::new()))?;
 
-    let context = yaml_to_gtmpl(config)?;
+    config.insert(
+        Yaml::String("Env".to_string()),
+        Yaml::Hash(
+            env::vars()
+                .map(|(k, v)| (Yaml::String(k), Yaml::String(v)))
+                .collect(),
+        ),
+    );
+
+    let context = yaml_to_gtmpl(Yaml::Hash(config))?;
     let result = gtmpl::template(&manifest, context)?;
     print!("{}", result);
 
@@ -38,7 +51,7 @@ fn load_manifest(path: &str) -> Result<String, Box<dyn Error>> {
     Ok(fs::read_to_string(path)?)
 }
 
-fn load_config(path: &str) -> Result<Yaml, Box<dyn Error>> {
+fn load_config(path: &str) -> Result<yaml::Hash, Box<dyn Error>> {
     let mut config = YamlLoader::load_from_str(&fs::read_to_string(path)?)?;
 
     let config = match config.len() {
@@ -53,21 +66,10 @@ fn load_config(path: &str) -> Result<Yaml, Box<dyn Error>> {
         }
     };
 
-    let mut config = match config {
-        Yaml::Hash(config) => config,
-        _ => return Err(format!("Config file {} does not contain a mapping", path).into()),
-    };
-
-    config.insert(
-        Yaml::String("Env".to_string()),
-        Yaml::Hash(
-            env::vars()
-                .map(|(k, v)| (Yaml::String(k), Yaml::String(v)))
-                .collect(),
-        ),
-    );
-
-    Ok(Yaml::Hash(config))
+    match config {
+        Yaml::Hash(config) => Ok(config),
+        _ => Err(format!("Config file {} does not contain a mapping", path).into()),
+    }
 }
 
 /// Convert a [`yaml_rust::Yaml`] value into a [`gtmpl::Value`].
