@@ -1,10 +1,13 @@
+mod config;
+
 use std::collections::HashMap;
 use std::env;
-use std::error::Error;
-use std::fs::{self};
+use std::fs::{self, File};
 
+use anyhow::{Context, Error, Result};
 use structopt::StructOpt;
-use yaml_rust::{yaml, Yaml, YamlLoader};
+
+use self::config::Config;
 
 /// Templatisation for Kubernetes manifests
 #[derive(Debug, StructOpt)]
@@ -21,97 +24,32 @@ struct Command {
     config: Option<String>,
 }
 
-fn main() -> Result<(), Box<dyn Error>> {
+fn main() -> Result<()> {
     let cmd = Command::from_args();
 
-    let manifest = load_manifest(&cmd.filename)?;
-    let mut config = cmd
-        .config
-        .as_deref()
-        .map(load_config)
-        .unwrap_or_else(|| Ok(yaml::Hash::new()))?;
+    let manifest = fs::read_to_string(&cmd.filename)
+        .with_context(|| format!("failed to read {}", cmd.filename))?;
 
-    config.insert(
-        Yaml::String("Env".to_string()),
-        Yaml::Hash(
-            env::vars()
-                .map(|(k, v)| (Yaml::String(k), Yaml::String(v)))
-                .collect(),
-        ),
-    );
+    let config = get_config(cmd.config.as_deref())?;
 
-    let context = yaml_to_gtmpl(Yaml::Hash(config))?;
-    let result = gtmpl::template(&manifest, context)?;
+    let result = gtmpl::template(&manifest, config)
+        .map_err(Error::msg)
+        .with_context(|| format!("failed to render {}", cmd.filename))?;
     print!("{}", result);
 
     Ok(())
 }
 
-fn load_manifest(path: &str) -> Result<String, Box<dyn Error>> {
-    Ok(fs::read_to_string(path)?)
-}
-
-fn load_config(path: &str) -> Result<yaml::Hash, Box<dyn Error>> {
-    let mut config = YamlLoader::load_from_str(&fs::read_to_string(path)?)?;
-
-    let config = match config.len() {
-        0 => return Err(format!("Config file {} is empty", path).into()),
-        1 => config.remove(0),
-        len => {
-            return Err(format!(
-                "Config file {} contains multiple ({}) YAML documents – only one is allowed",
-                path, len
-            )
-            .into())
-        }
-    };
-
-    match config {
-        Yaml::Hash(config) => Ok(config),
-        _ => Err(format!("Config file {} does not contain a mapping", path).into()),
+fn get_config(path: Option<&str>) -> Result<Config> {
+    fn load_config(path: &str) -> Result<Config> {
+        File::open(path)
+            .map_err(Error::new)
+            .and_then(|file| Config::from_reader(file).map_err(Error::new))
+            .with_context(|| format!("failed to read config {}", &path))
     }
-}
 
-/// Convert a [`yaml_rust::Yaml`] value into a [`gtmpl::Value`].
-///
-/// The implementation is based on the `into_*` methods on `yaml_rust::Yaml`, rather than matching
-/// to convert between the enums. This is due to some non-trivial incompatibilities such as
-/// `Yaml::Real` storing its value as a `String` and the resolution of `Yaml::Alias` values.
-fn yaml_to_gtmpl(input: Yaml) -> Result<gtmpl::Value, Box<dyn Error>> {
-    use gtmpl::Value::*;
-    if input.as_bool().is_some() {
-        Ok(Bool(input.into_bool().unwrap()))
-    } else if input.as_f64().is_some() {
-        Ok(Number(input.into_f64().unwrap().into()))
-    } else if input.as_hash().is_some() {
-        let input = input.into_hash().unwrap();
-        let mut output = HashMap::with_capacity(input.len());
-        input
-            .into_iter()
-            .try_for_each::<_, Result<_, Box<dyn Error>>>(|(key, value)| {
-                let key = match key.into_string() {
-                    Some(key) => key,
-                    None => return Err("non-string keys are not supported".into()),
-                };
-                output.insert(key, yaml_to_gtmpl(value)?);
-                Ok(())
-            })?;
-        Ok(Object(output))
-    } else if input.as_i64().is_some() {
-        Ok(Number(input.into_i64().unwrap().into()))
-    } else if input.as_str().is_some() {
-        Ok(String(input.into_string().unwrap()))
-    } else if input.as_vec().is_some() {
-        let input = input.into_vec().unwrap();
-        let mut output = Vec::with_capacity(input.len());
-        input
-            .into_iter()
-            .try_for_each::<_, Result<_, Box<dyn Error>>>(|value| {
-                output.push(yaml_to_gtmpl(value)?);
-                Ok(())
-            })?;
-        Ok(Array(output))
-    } else {
-        Err(format!("YAML value cannot be used in Go templates: {:?}", input).into())
-    }
+    let mut config = path.map(load_config).transpose()?.unwrap_or_default();
+    config.insert("Env".to_string(), env::vars().collect::<HashMap<_, _>>());
+
+    Ok(config)
 }
