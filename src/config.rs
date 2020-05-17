@@ -51,7 +51,7 @@ impl Config {
 
         let value = match yaml_to_gtmpl(yaml)? {
             gtmpl::Value::Object(value) => value,
-            _ => panic!("YAML hash became non-gmpl Value"),
+            _ => panic!("YAML hash became non-gmpl Value::Object"),
         };
 
         Ok(Config { value })
@@ -68,46 +68,30 @@ impl From<Config> for gtmpl::Value {
     }
 }
 
-/// Convert a [`yaml_rust::Yaml`] value into a [`gtmpl::Value`].
-///
-/// The implementation is based on the `into_*` methods on `yaml_rust::Yaml`, rather than matching
-/// to convert between the enums. This is due to some non-trivial incompatibilities such as
-/// `Yaml::Real` storing its value as a `String` and the resolution of `Yaml::Alias` values.
 fn yaml_to_gtmpl(input: Yaml) -> Result<gtmpl::Value, Error> {
-    use gtmpl::Value::*;
-    if input.as_bool().is_some() {
-        Ok(Bool(input.into_bool().unwrap()))
-    } else if input.as_f64().is_some() {
-        Ok(Number(input.into_f64().unwrap().into()))
-    } else if input.as_hash().is_some() {
-        let input = input.into_hash().unwrap();
-        let mut output = HashMap::with_capacity(input.len());
-        input
+    match input {
+        Yaml::Array(value) => value
             .into_iter()
-            .try_for_each::<_, Result<_, Error>>(|(key, value)| {
-                let key = match key.as_str() {
-                    Some(_) => key.into_string().unwrap(),
-                    None => return Err(Error::NonStringKey(key)),
+            .try_fold(Vec::new(), |mut result, item| {
+                result.push(yaml_to_gtmpl(item)?);
+                Ok(result)
+            })
+            .map(gtmpl::Value::from),
+        Yaml::Boolean(value) => Ok(value.into()),
+        Yaml::Hash(value) => value
+            .into_iter()
+            .try_fold(HashMap::new(), |mut result, (key, item)| {
+                let key = match key {
+                    Yaml::String(key) => key,
+                    key => return Err(Error::NonStringKey(key)),
                 };
-                output.insert(key, yaml_to_gtmpl(value)?);
-                Ok(())
-            })?;
-        Ok(Object(output))
-    } else if input.as_i64().is_some() {
-        Ok(Number(input.into_i64().unwrap().into()))
-    } else if input.as_str().is_some() {
-        Ok(String(input.into_string().unwrap()))
-    } else if input.as_vec().is_some() {
-        let input = input.into_vec().unwrap();
-        let mut output = Vec::with_capacity(input.len());
-        input
-            .into_iter()
-            .try_for_each::<_, Result<_, Error>>(|value| {
-                output.push(yaml_to_gtmpl(value)?);
-                Ok(())
-            })?;
-        Ok(Array(output))
-    } else {
-        Err(Error::InvalidValue(input))
+                result.insert(key, yaml_to_gtmpl(item)?);
+                Ok(result)
+            })
+            .map(gtmpl::Value::Object),
+        Yaml::Integer(value) => Ok(value.into()),
+        value @ Yaml::Real(_) => Ok(value.into_f64().unwrap().into()),
+        Yaml::String(value) => Ok(value.into()),
+        value => Err(Error::InvalidValue(value)),
     }
 }
